@@ -1,0 +1,75 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI-NETWORKING
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      - name: Install OC CLI
+        run: |
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz | tar xz
+          sudo mv oc /usr/local/bin/
+          oc version
+      
+      - name: Verificar secreto OPENSHIFT_TOKEN sin exponerlo
+        env:
+          OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+        run: |
+          if [ -z "$OPENSHIFT_TOKEN" ]; then
+            echo "ERROR: OPENSHIFT_TOKEN no está definido o está vacío."
+            exit 1
+          fi
+          echo "::add-mask::$OPENSHIFT_TOKEN"  # asegura que se oculte si se imprime por error
+          echo "Longitud del token: ${#OPENSHIFT_TOKEN} caracteres"
+          echo -n "$OPENSHIFT_TOKEN" | sha256sum | awk '{print "sha256(token) = "$1}'
+      
+      - name: Saneando token (quitar CR/LF) y exportando a entorno
+        env:
+          RAW_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+        run: |
+          CLEAN_TOKEN="$(printf '%s' "$RAW_TOKEN" | tr -d '\r\n')"
+          echo "OPENSHIFT_TOKEN_STRIPPED=$CLEAN_TOKEN" >> $GITHUB_ENV
+          echo "::add-mask::$CLEAN_TOKEN"
+          echo "Longitud saneada: ${#CLEAN_TOKEN}"
+
+      - name: Probar oc login directo (debug)
+        run: |
+          oc version
+          oc login --token="$OPENSHIFT_TOKEN_STRIPPED" --server="https://api.rm2.thpm.p1.openshiftapps.com:6443"
+          
+      - name: Log in Openshift
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: https://api.rm2.thpm.p1.openshiftapps.com:6443
+          openshift_token: ${{ env.OPENSHIFT_TOKEN_STRIPPED }} 
+          namespace: forcet22-dev
+
+      - name: Deploy files
+        run: |
+          oc project forcet22-dev
+          oc apply -f config/security/networking.yml
+          oc rollout status deployment/forcet-deployment
+
+      - name: End
+        run: | 
+          echo "Si llego aquí es que finalizo, cierto!!"

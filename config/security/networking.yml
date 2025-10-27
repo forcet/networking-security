@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-forcet-microservice
+  namespace: forcet22-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: forcet-lucky-app
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: forcet-app
+      ports:
+        - protocol: TCP
+          port: 3000  
