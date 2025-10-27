@@ -67,7 +67,8 @@ jobs:
       - name: Deploy files
         run: |
           oc project forcet22-dev
-          oc apply -f config/security/networking.yml
+          oc apply -f config/security/publicNetworking.yml
+          oc apply -f config/security/privateNetworking.yml
           oc rollout status deployment/forcet-deployment
 
       - name: End
